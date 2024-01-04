@@ -1,0 +1,50 @@
+*I was looking through the sashelp datasets for an example of an experiment with 
+multiple timepoints for the same subject. I couldn't find one, so I edited sashelp.comet to resemble
+such a dataset. The following code is for that editing, and not part of the ANOVA analysis.;
+*sashelp.comet has multiple length observations for each sample taken.
+The following code reorganizes the data so that there is one line per sample with only the mean length shown.;
+PROC MEANS DATA=sashelp.comet noprint nway ;
+    BY dose rat;
+    CLASS sample;
+    VAR length;
+    OUTPUT out=comet mean=length_mean;
+RUN;
+
+*Creating a new variable 'subject' that counts the number of same-dosages.;
+PROC SORT DATA = comet;
+  BY dose;
+RUN;
+DATA comet1;
+  SET comet;
+  Subject + 1;
+  BY dose;
+  IF first.dose THEN Subject = 1;
+RUN;
+PROC PRINT DATA=comet1;
+
+*The Mixed ANOVA analysis begins here;
+*Creating a box plot for length by dose;
+*Results suggest that length varies by dosage.
+All lengths are significantly different from the control lengths. Dosages 1.25, 2.5, and 5 are 
+approximately similar, but at the 200 dosage the length drops while still remaining above the control level.;
+PROC SORT DATA=comet1;
+    BY dose;
+RUN;
+PROC BOXPLOT DATA=comet1;
+    PLOT length_mean*dose;
+    INSET min mean max stddev /
+    HEADER = 'Overall Statistics'
+    POS = tm; /*position=top margin*/
+    INSETGROUP min mean max stddev;
+RUN; 
+
+*Running a random effects ANOVA, using a mixed effect model where subject is a random effect and 
+dose is a fixed effect;
+*Results suggest that all means are significantly different from one another except for
+dosages 1.25 and 2.5, and dosages 2.5 and 5;
+PROC MIXED DATA=comet1 method=type3 covtest cl plots=(all);
+    CLASS dose subject;
+    MODEL length_mean = dose/solution;
+    RANDOM subject/ solution;
+    LSMEANS dose/ pdiff;
+RUN;
